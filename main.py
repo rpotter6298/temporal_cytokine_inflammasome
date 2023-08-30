@@ -69,7 +69,7 @@ def generate_reports(TAS):
     for module in TAS.modules:
         TAS.aggregate_time_comparisons(TAS.modules[module])
 
-def generate_plots(TAS):
+def generate_plots(TAS, file_extension=".tiff"):
     cyto = TAS.modules["TS_Cyto"]
     module = TAS.modules["TS_Speck"]
     #check that plots directory exists and create it if not
@@ -91,7 +91,7 @@ def generate_plots(TAS):
                     measurement_type="Normalized_Measurement",
                 ),
                 manual_ax_modification=ax_modification,
-                filepath=Path("plots", "".join([file_title.replace("-","").replace(" ", "_"), ".tiff"])),
+                filepath=Path("plots", "".join([file_title.replace("-","").replace(" ", "_"), file_extension])),
             )
 
     def speck_curves_raw_counts():        
@@ -110,7 +110,7 @@ def generate_plots(TAS):
                     measurement_type="Measurement",
                 ),
                 manual_ax_modification=ax_modification,
-                filepath=Path("plots", "".join([file_title.replace("-","").replace(" ", "_"), "_", str(treatment_set), ".tiff"])),
+                filepath=Path("plots", "".join([file_title.replace("-","").replace(" ", "_"), "_", str(treatment_set), file_extension])),
             )
 
     def cytokine_plots_all_treatments_single_analyte():
@@ -134,7 +134,7 @@ def generate_plots(TAS):
                     analyte_selection=[analyte],
                 ),
                 manual_ax_modification=ax_modification,
-                filepath=Path("plots", "".join([aname.replace("-","").replace(" ", "_"),"_concentration_over_time.tiff"])),
+                filepath=Path("plots", "".join([aname.replace("-","").replace(" ", "_"),"_concentration_over_time", file_extension])),
             )
 
     def ratio_IL18_IL1b():
@@ -148,7 +148,7 @@ def generate_plots(TAS):
 
 
         plotting_module.plot_ratio(
-            module=TAS.modules["TS_Cyto"], invert=True, manual_ax_modification=ax_modification, filepath=Path("plots", "".join([file_title.replace("-","").replace(" ", "_").replace(":","-"), ".tiff"]))
+            module=TAS.modules["TS_Cyto"], invert=True, manual_ax_modification=ax_modification, filepath=Path("plots", "".join([file_title.replace("-","").replace(" ", "_").replace(":","-"), file_extension]))
         )
 
     def ratio_IL18_IL1b_with_specks():
@@ -165,7 +165,7 @@ def generate_plots(TAS):
 
         plotting_module.plot_count_against_ratio(
             TAS, ratio_name="IL18:IL1b", invert=True, manual_ax_modification=ax_modification,
-            filepath=Path("plots", "".join([file_title.replace("-","").replace(" ", "_").replace(":","-"), ".tiff"]))
+            filepath=Path("plots", "".join([file_title.replace("-","").replace(" ", "_").replace(":","-"), file_extension]))
         )
 
     def ratio_IL18_IL1b_with_specks_individual():
@@ -187,7 +187,7 @@ def generate_plots(TAS):
                 treatments=[treatment],
                 invert=True,
                 manual_ax_modification=ax_modification,
-                filepath=Path("plots", "".join([file_title.replace("-","").replace(" ", "_").replace(":","-"), ".tiff"]))
+                filepath=Path("plots", "".join([file_title.replace("-","").replace(" ", "_").replace(":","-"), file_extension]))
             )
     
     def speck_plots_individual():          
@@ -212,7 +212,7 @@ def generate_plots(TAS):
                     measurement_type="Measurement",
                 ),
                 manual_ax_modification=ax_modification,
-                filepath=Path("plots", "".join([file_title.replace("-","").replace(" ", "_"), ".tiff"]))
+                filepath=Path("plots", "".join([file_title.replace("-","").replace(" ", "_"), file_extension]))
             )
 
     ### RUN ALL FUNCTIONS
@@ -225,6 +225,8 @@ def generate_plots(TAS):
     normalized_speck_counts_with_MCC950()
 
 def main():
+    #check that all requirements in requirements.txt are installed
     TAS = prepare_analysis_class()
     generate_reports(TAS)
     generate_plots(TAS)
+    #generate_plots(TAS, file_extension=".png")
