@@ -419,10 +419,12 @@ class analysis_module:
                 stat, p = shapiro(time_0_set["Measurement"])
                 if p < 0.05:
                     print(f"Data for Treatment {treatment} and Analyte {analyte} is not normally distributed")
+                    print(p)
                     # You can decide to continue or break based on this result
                     continue
                 else:
                     print(f"Data for Treatment {treatment} and Analyte {analyte} is normally distributed")
+                    print(p)
                 max_measurement = set["Measurement"].mean()
 
                 max_measuremnt_p, ci = bootstrap_t_test(
