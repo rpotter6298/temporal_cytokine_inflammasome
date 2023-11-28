@@ -70,7 +70,6 @@ def plot_everything(
     subset = ldh_module.data[ldh_module.data["Treatment"] == treatment]
     # change cytotoxicity to a percentage
     subset["cytotoxicity"] = subset["cytotoxicity"] * 100
-    cyto_means = subset.groupby(["Time (h)"])["cytotoxicity"].mean().reset_index()
 
     ratio_name_x = ratio_name.split(":")[0]
     ratio_name_y = ratio_name.split(":")[1]
@@ -99,14 +98,14 @@ def plot_everything(
     ax.yaxis.labelpad = padding[0]
 
     ax2 = ax.twinx()
-    sns.lineplot(
+    sns.scatterplot(
         data=speck_data,
         x="Time (hrs)",
         y="Measurement",
         color=color,
         ax=ax,
-        errorbar="se",
-        legend=False,
+        #    errorbar="se",
+        #    legend=False,
     )
 
     if invert == True:
@@ -118,23 +117,22 @@ def plot_everything(
         clean_name = f"Cytokine Concentration (ng/ml)".replace("b", "β")
         ax2.set_ylabel(f"Ratio of Cytokine Measurements, {ratio_name_x}:{ratio_name_y}")
     palette = custom_palette(treatment_indeces[treatment])[1:]
-    sns.lineplot(
+    sns.pointplot(
         data=sub_cyto,
         x="Time (hrs)",
         y="Measurement",
         hue="Analyte",
         ax=ax2,
         errorbar="se",
-        legend=False,
-        palette=palette,
-        style="Analyte",  # using style
-        # dashes=[(2, 2)] * len(sub_cyto["Analyte"].unique()),
+        #    legend=False,
+        #    palette=palette,
+        #    style="Analyte",  # using style
+        #    dashes=[(2, 2)] * len(sub_cyto["Analyte"].unique()),
     )
 
     ax2.yaxis.labelpad = padding[1]
     ax2.yaxis.tick_left()
     ax2.yaxis.set_label_position("left")
-    ax2.lines[0].set_linestyle("dotted")
     ax2.tick_params(axis="y", direction="in", pad=-27.5, colors=darker_pastel)
     ax2.yaxis.set_major_formatter(ticker.FormatStrFormatter("%.0f"))
     ax2.yaxis.set_major_locator(MaxNLocator(nbins=6))
@@ -160,15 +158,6 @@ def plot_everything(
         ax=ax3,
         #    errorbar="se",
         legend=False,
-    )
-    sns.scatterplot(
-        data=cyto_means,
-        x="Time (h)",
-        y="cytotoxicity",
-        color="black",
-        marker="_",
-        s=500,
-        ax=ax3,
     )
     # for bio_rep in subset["bio. Rep."].unique():
     #     for tech_rep in subset["tech. Rep"].unique():
@@ -207,7 +196,7 @@ def plot_everything(
             color=legend_palette[1],
             lw=2,
             label="IL-18 Measurement",
-            linestyle="dotted",
+            linestyle="--",
         ),
         Line2D(
             [0],
@@ -249,7 +238,7 @@ plot_everything(
     treatments=["ATP"],
     padding=(20, 30),
     invert=True,
-    filepath=Path("plots", "alt1_atp_ratio_speck_ldh_combined.png"),
+    filepath=Path("plots", "alt3_atp_ratio_speck_ldh_combined.png"),
 )
 plot_everything(
     analysis_module=TAS,
@@ -258,7 +247,7 @@ plot_everything(
     treatments=["MSU"],
     padding=(20, 40),
     invert=True,
-    filepath=Path("plots", "alt1_msu_ratio_speck_ldh_combined.png"),
+    filepath=Path("plots", "alt3_msu_ratio_speck_ldh_combined.png"),
 )
 plot_everything(
     TAS,
@@ -267,8 +256,5 @@ plot_everything(
     treatments=["Nigericin"],
     padding=(20, 40),
     invert=True,
-    filepath=Path("plots", "alt1_nigericin_ratio_speck_ldh_combined.png"),
+    filepath=Path("plots", "alt3_nigericin_ratio_speck_ldh_combined.png"),
 )
-
-
-sns.scatterplot

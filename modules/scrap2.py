@@ -1,3 +1,10 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+import matplotlib.ticker as ticker
+from matplotlib.ticker import MaxNLocator
+
+
 def plot_everything(
     analysis_module,
     ldh_module,
@@ -21,11 +28,8 @@ def plot_everything(
     darker_pastel = tuple(max(0, x - 0.2) for x in pastel_color)
 
     TAS = analysis_module
-    Cyto = TAS.modules["TS_Cyto"].data
-    sub_cyto = Cyto[Cyto["Treatment"] == treatment]
     speck_info = TAS.modules["TS_Speck"]
     ratio_info = TAS.modules["TS_Cyto"].ratio_data[ratio_name]
-
     speck_data = speck_info.data[speck_info.data["Treatment"].isin(treatments)]
     ratio_data = ratio_info[ratio_info["Treatment"].isin(treatments)]
 
@@ -89,20 +93,6 @@ def plot_everything(
                 linestyle="--",
                 alpha=0.25,
             )
-    ax.set_ylim(
-        bottom=ax.get_ylim()[0], top=ax.get_ylim()[1] * 1.1
-    )  # Increase the upper limit by 10%
-    ax2.set_ylim(
-        bottom=0, top=ax2.get_ylim()[1] * 1.1
-    )  # Increase the upper limit by 10%
-    ax3.set_ylim(
-        bottom=ax3.get_ylim()[0], top=ax3.get_ylim()[1] * 1.1
-    )  # Increase the upper limit by 10%
-    # After all your plotting and after setting the limits
-    ticks = ax2.get_yticks()
-    ticks = ticks[ticks != 0]  # remove 0 from ticks
-    ticks = ticks[ticks < max(ticks)]  # this removes the highest tick
-    ax2.set_yticks(ticks)  # set the new ticks
 
     legend_elements = [
         Line2D([0], [0], color=color, lw=2, label="Normalized Speck Formation"),
@@ -131,7 +121,7 @@ def plot_everything(
     ax.legend(
         handles=legend_elements, loc="upper center", bbox_to_anchor=(0.5, 1), ncol=3
     )
-    plt.xlim(-1.25, 21.2)
+    plt.xlim(-0.75, 21.2)
     plt.xlabel("Time (hrs)")
     if filepath is not None:
         plt.savefig(filepath, dpi=300, bbox_inches="tight")
@@ -151,8 +141,8 @@ plot_everything(
     filepath=Path("plots", "ratio_speck_ldh_combined_atp.png"),
 )
 plot_everything(
-    analysis_module=TAS,
-    ldh_module=LDH,
+    TAS,
+    LDH,
     ratio_name="IL18:IL1b",
     treatments=["MSU"],
     padding=(20, 40),
