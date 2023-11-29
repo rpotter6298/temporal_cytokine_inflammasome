@@ -4,9 +4,67 @@ from typing import Type, List, Dict, Callable
 import matplotlib.pyplot as plt
 import seaborn as sns
 from modules.stats_functions import bootstrap_t_test
+from matplotlib.lines import Line2D
+import matplotlib.ticker as ticker
 
 
 class plotting_module:
+    treatment_indeces = {
+        "ATP": 0,
+        "MSU": 1,
+        "Nigericin": 2,
+    }
+
+    @staticmethod
+    def show_colors(index):
+        """
+        Display the colors from the custom palette as a bar plot.
+
+        :param index: Index of color in seaborn's default palette.
+        :type index: int
+        """
+        palette = plotting_module.custom_palette(index)
+
+        # Create a new figure
+        fig, ax = plt.subplots(figsize=(3, 1))  # 3 bars, each with width of 1
+
+        # Plot a bar for each color in the palette
+        for i, color in enumerate(palette):
+            ax.bar(i, 1, color=color)
+
+        # Remove y-axis and x-axis ticks and labels
+        ax.set_yticks([])
+        ax.set_xticks([])
+
+        # Remove the x and y axis spines
+        ax.spines["left"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["top"].set_visible(False)
+        ax.spines["bottom"].set_visible(False)
+
+        plt.show()
+
+    @staticmethod
+    def custom_palette(index):
+        """
+        Generate a custom color palette based on a color index from seaborn's default palette.
+
+        :param index: Index of color in seaborn's default palette.
+        :type index: int
+        :return: List of three color codes.
+        :rtype: list
+        """
+        # Get the default color
+        default_color = sns.color_palette()[index]
+
+        # Get a pastel version of the color
+        pastel_color = sns.color_palette("pastel")[index]
+
+        # Get a dark version of the color
+        dark_color = sns.color_palette("dark")[index]
+
+        return [default_color, pastel_color, dark_color]
+
     @staticmethod
     def plot_lineplot(
         dataframe: pd.DataFrame,
@@ -220,7 +278,6 @@ class plotting_module:
             plt.show()
             return fig, ax
 
-
     @staticmethod
     def plot_ratio_old(
         module, measurement_type="Measurement", normalize_start=False, invert=False
@@ -343,3 +400,293 @@ class plotting_module:
             horizontalalignment="left",
         )
         return ax
+
+    @staticmethod
+    def plot_speck_count(
+        analysis_class,
+        treatments=None,
+        filepath=None,
+        axis=None,
+    ):
+        if treatments is None:
+            treatments = analysis_class.modules["TS_Speck"].data["Treatment"].unique()
+
+        speck_info = analysis_class.modules["TS_Speck"]
+        if axis == None:
+            fig, ax = plt.subplots(figsize=(10, 6))
+
+        else:
+            ax = axis
+        legend_elements = []
+        ax.set_ylabel("Speck Count")
+        # ax.yaxis.labelpad = padding[0]
+        for treatment in treatments:
+            # Get the color for the treatment
+            index = plotting_module.treatment_indeces[treatment]
+            palette = plotting_module.custom_palette(index)
+
+            # Filter data for the specific treatmen
+            speck_data = speck_info.data[speck_info.data["Treatment"] == treatment]
+
+            sns.lineplot(
+                data=speck_data,
+                x="Time (hrs)",
+                y="Measurement",
+                color=palette[0],
+                ax=ax,
+                errorbar="se",
+                legend=False,
+            )
+            # Adds some white space so the legend doesn't overlap with the plot
+            if len(treatments) > 1:
+                specifier = f" - {treatment}"
+            else:
+                specifier = ""
+
+            legend_elements.append(
+                Line2D(
+                    [0],
+                    [0],
+                    color=palette[0],
+                    lw=2,
+                    label=f"Speck Count{specifier}",
+                ),
+            )
+
+        if axis == None:
+            ax.set_ylim(bottom=ax.get_ylim()[0], top=ax.get_ylim()[1] * 1.1)
+            plt.xlim(-1.25, 21)
+            plt.xlabel("Time (hrs)")
+            ax.legend(
+                handles=legend_elements,
+                loc="upper center",
+                bbox_to_anchor=(0.5, 1),
+                ncol=3,
+            )
+            if filepath is not None:
+                plt.savefig(filepath, dpi=300, bbox_inches="tight")
+                plt.close()
+            else:
+                plt.show()
+                return fig, ax
+
+        else:
+            return legend_elements
+
+    @staticmethod
+    def plot_cytokines(
+        analysis_class,
+        treatments=None,
+        filepath=None,
+        padding: tuple = (0, 0),
+        axis=None,
+    ):
+        if treatments is None:
+            treatments = analysis_class.modules["TS_Cyto"].data["Treatment"].unique()
+
+        legend_elements = []
+
+        Cyto = analysis_class.modules["TS_Cyto"].data
+
+        if axis == None:
+            fig, ax = plt.subplots(figsize=(10, 6))
+        else:
+            ax = axis
+
+        for treatment in treatments:
+            # Get the color for the treatment
+            index = plotting_module.treatment_indeces[treatment]
+            palette = plotting_module.custom_palette(index)[1:]
+            sub_cyto = Cyto[Cyto["Treatment"] == treatment]
+
+            if "Analyte" not in sub_cyto:
+                raise ValueError("'Analyte' column not found in the dataset.")
+
+            sns.lineplot(
+                data=sub_cyto,
+                x="Time (hrs)",
+                y="Measurement",
+                hue="Analyte",
+                ax=ax,
+                errorbar="se",
+                legend=False,
+                palette=palette,
+                style="Analyte",  # using style
+                # dashes=[(2, 2)] * len(sub_cyto["Analyte"].unique()),
+            )
+            if len(treatments) > 1:
+                specifier = f" - {treatment}"
+            else:
+                specifier = ""
+            linestyles = ["dotted", "dashed"]
+            for i, analyte in enumerate(sub_cyto["Analyte"].unique()):
+                legend_elements.append(
+                    Line2D(
+                        [0],
+                        [0],
+                        color=palette[i],
+                        lw=2,
+                        label=f"{analyte.replace('b', 'β')}{specifier}",
+                        linestyle=linestyles[i],
+                    )
+                )
+        ax.lines[0].set_linestyle("dotted")
+
+        # Axis labels and formatting
+        clean_name = f"Cytokine Concentration (ng/ml)".replace("b", "β")
+        ax.set_ylabel(clean_name, color=palette[1], labelpad=padding[1])
+        ax.set_xlabel("Time (hrs)")
+        ax.yaxis.tick_left()
+        ax.yaxis.set_major_formatter(ticker.FormatStrFormatter("%.0f"))
+        ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=6))
+        ax.yaxis.set_label_position("left")
+        ax.set_ylim(bottom=0, top=ax.get_ylim()[1] * 1.1)
+
+        # Adjust Axis tick marks
+        ax.tick_params(axis="y", direction="in", pad=padding[0], colors=palette[1])
+        ticks = ax.get_yticks()
+        ticks = ticks[ticks != 0]  # remove 0 from ticks
+        ticks = ticks[ticks < max(ticks)]  # this removes the highest tick
+        ax.set_yticks(ticks)  # set the new ticks
+        for label in ax.get_yticklabels():
+            label.set_horizontalalignment("left")
+        if axis == None:
+            # ax.set_ylim(bottom=ax.get_ylim()[0], top=ax.get_ylim()[1] * 1.1)
+            # plt.xlim(-1.25, 21.2)
+            # plt.xlabel("Time (hrs)")
+            ax.legend(
+                handles=legend_elements,
+                loc="upper center",
+                bbox_to_anchor=(0.5, 1),
+                ncol=3,
+            )
+            plt.xlim(-1.25, 24)
+            if filepath is not None:
+                plt.savefig(filepath, dpi=300, bbox_inches="tight")
+                plt.close()
+            else:
+                plt.show()
+                return fig, ax
+
+        else:
+            return legend_elements
+
+    @staticmethod
+    def plot_cytotoxicity(
+        analysis_class,
+        treatments=None,
+        filepath=None,
+        axis=None,
+    ):
+        data = analysis_class.modules["LDH"].data
+        if treatments is None:
+            treatments = data["Treatment"].unique()
+
+        if axis == None:
+            fig, ax = plt.subplots(figsize=(10, 6))
+        else:
+            ax = axis
+        # ax = ax.twinx()
+        legend_elements = []
+
+        for treatment in treatments:
+            cytotoxicity = data[data["Treatment"] == treatment]
+            # change cytotoxicity to a percentage
+            cytotoxicity["cytotoxicity"] = cytotoxicity["cytotoxicity"] * 100
+            cytotox_means = (
+                cytotoxicity.groupby(["Time (h)"])["cytotoxicity"].mean().reset_index()
+            )
+            sns.scatterplot(
+                data=cytotoxicity,
+                x="Time (h)",
+                y="cytotoxicity",
+                color="red",
+                ax=ax,
+                #    errorbar="se",
+                legend=False,
+            )
+            sns.scatterplot(
+                data=cytotox_means,
+                x="Time (h)",
+                y="cytotoxicity",
+                color="black",
+                marker="_",
+                s=500,
+                ax=ax,
+            )
+        ax.spines["right"].set_position(("outward", 0))
+        ax.set_ylabel("Cytotoxicity", color="red")
+        ax.tick_params(axis="y", colors="red")
+        # Add % symbol to tick values on ax3
+        ax.yaxis.set_major_formatter(ticker.PercentFormatter())
+
+        legend_elements.append(
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="w",
+                markerfacecolor="red",
+                markersize=8,
+                label="Cytotoxicity",
+                linestyle="None",
+            )
+        )
+
+        ax.set_ylim(bottom=ax.get_ylim()[0], top=ax.get_ylim()[1] * 1.1)
+        if axis == None:
+            # ax.set_ylim(bottom=ax.get_ylim()[0], top=ax.get_ylim()[1] * 1.1)
+            # plt.xlim(-1.25, 21.2)
+            # plt.xlabel("Time (hrs)")
+            ax.legend(
+                handles=legend_elements,
+                loc="upper center",
+                bbox_to_anchor=(0.5, 1),
+                ncol=3,
+            )
+            if filepath is not None:
+                plt.savefig(filepath, dpi=300, bbox_inches="tight")
+                plt.close()
+            else:
+                plt.show()
+                return fig, ax
+
+        else:
+            return legend_elements
+
+    @staticmethod
+    def combined_plot(analysis_class, treatments=None, filepath=None, padding=(0, 0)):
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax2 = ax.twinx()
+        ax3 = ax.twinx()
+        all_legend_elements = []
+        legend_elements = plotting_module.plot_speck_count(
+            analysis_class, treatments=treatments, axis=ax
+        )
+        all_legend_elements += legend_elements
+        legend_elements = plotting_module.plot_cytokines(
+            analysis_class,
+            treatments=treatments,
+            axis=ax2,
+            padding=padding,
+        )
+        all_legend_elements += legend_elements
+        legend_elements = plotting_module.plot_cytotoxicity(
+            analysis_class,
+            treatments=treatments,
+            axis=ax3,
+        )
+        ax.legend(
+            handles=all_legend_elements,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 1),
+            ncol=3,
+        )
+        plt.xlim(-1.25, 21.2)
+        plt.xlabel("Time (hrs)")
+
+        if filepath is not None:
+            plt.savefig(filepath, dpi=300, bbox_inches="tight")
+            plt.close()
+        else:
+            plt.show()
