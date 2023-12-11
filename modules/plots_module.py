@@ -6,6 +6,10 @@ import seaborn as sns
 from modules.stats_functions import bootstrap_t_test
 from matplotlib.lines import Line2D
 import matplotlib.ticker as ticker
+import matplotlib.lines as mlines
+from matplotlib.colors import LinearSegmentedColormap
+import numpy as np
+import textwrap
 
 
 class plotting_module:
@@ -14,6 +18,7 @@ class plotting_module:
         "MSU": 1,
         "Nigericin": 2,
     }
+    linestyles = list(mlines.Line2D.lineStyles.keys())
 
     @staticmethod
     def show_colors(index):
@@ -676,6 +681,7 @@ class plotting_module:
             treatments=treatments,
             axis=ax3,
         )
+        all_legend_elements += legend_elements
         ax.legend(
             handles=all_legend_elements,
             loc="upper center",
@@ -685,6 +691,288 @@ class plotting_module:
         plt.xlim(-1.25, 21.2)
         plt.xlabel("Time (hrs)")
 
+        if filepath is not None:
+            plt.savefig(filepath, dpi=300, bbox_inches="tight")
+            plt.close()
+        else:
+            plt.show()
+
+    @staticmethod
+    def change_plot(
+        module, analytes=None, treatments=None, mode="change", axis=None, filepath=None
+    ):
+        if axis == None:
+            fig, ax = plt.subplots(figsize=(16, 9))
+        else:
+            ax = axis
+        if mode.lower() == "change":
+            y = "Absolute_Change"
+        elif mode.lower() == "acceleration":
+            y = "Acceleration"
+        elif mode.lower() == "smoothed acceleration":
+            y = "Acceleration_Smooth"
+        elif mode.lower() == "combo":
+            y1 = "Absolute_Change"
+            y2 = "Acceleration"
+            y3 = "Acceleration_Smooth"
+            ax2 = ax.twinx()
+        else:
+            raise ValueError("Invalid Mode Specified")
+
+        if treatments is None:
+            treatments = module.data["Treatment"].unique()
+        if module.name == "TS_Speck":
+            label = "Speck Count"
+        elif module.name == "TS_Cyto":
+            label = "Concentration"
+        legend_elements = []
+        if analytes is None:
+            analyte_list = module.data["Analyte"].unique()
+        else:
+            analyte_list = analytes
+        for i, analyte in enumerate(analyte_list):
+            # print(i, analyte)
+            linestyle = plotting_module.linestyles[i]
+            if analytes is not None or len(analyte_list) > 1:
+                analyte_tag = f" - {analyte}"
+            else:
+                analyte_tag = ""
+            data = module.data[module.data["Analyte"] == analyte]
+            for treatment in treatments:
+                treatment_data = data[data["Treatment"] == treatment]
+                # Get the color for the treatment
+                index = plotting_module.treatment_indeces[treatment]
+                if mode.lower() != "combo":
+                    palette = (
+                        plotting_module.custom_palette(index)
+                        if module.name == "TS_Speck"
+                        else plotting_module.custom_palette(index)[1:]
+                    )
+                    sns.lineplot(
+                        data=treatment_data,
+                        x="Time (hrs)",
+                        y=y,
+                        ax=ax,
+                        errorbar="se",
+                        color=palette[i],
+                        legend=False,
+                        linestyle=linestyle,
+                    )
+                    legend_elements.append(
+                        Line2D(
+                            [0],
+                            [0],
+                            color=palette[i],
+                            lw=2,
+                            label=f"{label} {mode.title()} {analyte_tag}",
+                            linestyle=linestyle,
+                        ),
+                    )
+                    ax.set_ylabel(f"{mode.title()}")
+
+                else:
+                    palette = plotting_module.custom_palette(index)
+                    # ax2 = ax.twinx()
+                    sns.lineplot(
+                        data=treatment_data,
+                        x="Time (hrs)",
+                        y=y1,
+                        ax=ax,
+                        errorbar="se",
+                        color=palette[0],
+                        legend=False,
+                        linestyle=linestyle,
+                    )
+                    sns.lineplot(
+                        data=treatment_data,
+                        x="Time (hrs)",
+                        y=y2,
+                        ax=ax2,
+                        errorbar="se",
+                        color=palette[1],
+                        legend=False,
+                        linestyle=linestyle,
+                    )
+                    sns.lineplot(
+                        data=treatment_data,
+                        x="Time (hrs)",
+                        y=y3,
+                        ax=ax2,
+                        color=palette[2],
+                        legend=False,
+                        linestyle=linestyle,
+                    )
+                    legend_elements.append(
+                        Line2D(
+                            [0],
+                            [0],
+                            color=palette[0],
+                            lw=2,
+                            label=f"{label} {y1.replace('_', ' ')} {analyte_tag}",
+                            linestyle=linestyle,
+                        )
+                    )
+                    legend_elements.append(
+                        Line2D(
+                            [0],
+                            [0],
+                            color=palette[1],
+                            lw=2,
+                            label=f"{label} {y2.replace('_', ' ')} {analyte_tag}",
+                            linestyle=linestyle,
+                        ),
+                    )
+                    legend_elements.append(
+                        Line2D(
+                            [0],
+                            [0],
+                            color=palette[2],
+                            lw=2,
+                            label=f"{label} {y3.replace('_', ' ')} {analyte_tag}",
+                            linestyle=linestyle,
+                        ),
+                    )
+                    ax.set_ylabel("Total Change")
+                    ax2.set_ylabel("Acceleration")
+
+        if axis == None:
+            ax.legend(
+                handles=legend_elements,
+                loc="upper center",
+                bbox_to_anchor=(0.5, 1),
+                ncol=3,
+            )
+            plt.xlim(-1.25, 24)
+            if filepath is not None:
+                ax.set_title(filepath.split("/")[-1].split(".")[0].replace("_", " "))
+                plt.savefig(filepath, dpi=300, bbox_inches="tight")
+                plt.close()
+            else:
+                plt.show()
+
+        else:
+            return legend_elements
+
+    @staticmethod
+    def combo_change_plot(
+        analysis_class, mode="Change", treatments=None, filepath=None
+    ):
+        fig, ax = plt.subplots(figsize=(16, 9))
+        legend_elements = []
+        for module in ["TS_Speck", "TS_Cyto"]:
+            legend_elements += plotting_module.change_plot(
+                analysis_class.modules[module],
+                treatments=treatments,
+                mode=mode,
+                axis=ax,
+            )
+        ax.legend(
+            handles=legend_elements,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 1),
+            ncol=3,
+        )
+        plt.xlim(-1.25, 21.2)
+        plt.xlabel("Time (hrs)")
+        if filepath is not None:
+            ax.set_title(filepath.split("/")[-1].split(".")[0].replace("_", " "))
+            plt.savefig(filepath, dpi=300, bbox_inches="tight")
+            plt.close()
+        else:
+            plt.show()
+
+    @staticmethod
+    def time_heatmap(time_correlation_df, filepath=None):
+        time_correlation_df["Correlation"] = pd.to_numeric(
+            time_correlation_df["Correlation"], errors="coerce"
+        )
+        pivot_df = time_correlation_df.pivot_table(
+            index="Time (hrs)", columns=["Treatment", "Cytokine"], values="Correlation"
+        )
+        pivot_p_values = time_correlation_df.pivot_table(
+            index="Time (hrs)", columns=["Treatment", "Cytokine"], values="p-value"
+        )
+        plt.figure(figsize=(12, 8))
+
+        yellow = plt.get_cmap("Spectral")(0.5)
+        purple = plt.get_cmap("Spectral")(1.0)
+        # mod_colors = spectral(np.linspace(0.5, 1.0, 256))
+        ytp = LinearSegmentedColormap.from_list("ytp", [yellow, purple])
+
+        ax = sns.heatmap(pivot_df, cmap=ytp, annot=True, fmt=".2f")
+        column_width = pivot_df.shape[1]
+        for i, (idx, row) in enumerate(pivot_p_values.iterrows()):
+            for j, p_value in enumerate(row):
+                text = ""
+                if p_value < 0.001:
+                    text = "***"
+                elif p_value < 0.01:
+                    text = "**"
+                elif p_value < 0.05:
+                    text = "*"
+
+                if text:
+                    # Get current text
+                    current_text = ax.texts[i * column_width + j].get_text()
+                    # Update text with asterisks
+                    ax.texts[i * column_width + j].set_text(current_text + text)
+
+        treatments = list(pivot_df.columns.get_level_values(0).unique())
+        treatment_colors = {
+            treatment: sns.color_palette()[plotting_module.treatment_indeces[treatment]]
+            for treatment in treatments
+        }
+        # Calculate the linewidth in terms of axis fraction
+        linewidth = 4
+        adjustment_factor = 0.0225
+        # Draw lines at the start and end of each treatment group
+        for i, treatment in enumerate(treatments):
+            treatment_columns = [col for col in pivot_df.columns if col[0] == treatment]
+            left = pivot_df.columns.get_loc(treatment_columns[0]) + adjustment_factor
+            right = (
+                pivot_df.columns.get_loc(treatment_columns[-1]) + 1 - adjustment_factor
+            )
+
+            # Draw a line at the left edge of the treatment group, shifted slightly to the left
+            ax.axvline(
+                x=left,
+                color=treatment_colors[treatment],
+                linewidth=linewidth,
+                zorder=1,
+            )
+
+            # Draw a line at the right edge of the treatment group, shifted slightly to the left
+            ax.axvline(
+                x=right,
+                color=treatment_colors[treatment],
+                linewidth=linewidth,
+                zorder=1,
+            )
+
+        def format_x_ticks(ticklabels):
+            wrap_width = max(
+                len(word) for label in ticklabels for word in label.get_text().split()
+            )
+            # Get the tick labels
+            format_labels = [label.get_text() for label in ticklabels]
+            # Split the tick labels into treatment and cytokine
+            format_labels = [label.split("-") for label in format_labels]
+            # Wrap each part of the label and join with newline
+            wrapped_labels = [
+                "\n".join(textwrap.wrap(part, width=wrap_width))
+                for label in format_labels
+                for part in label
+            ]
+            # Group the wrapped parts back into labels
+            stacked_labels = [
+                "\n".join(wrapped_labels[i : i + len(format_labels[0])])
+                for i in range(0, len(wrapped_labels), len(format_labels[0]))
+            ]
+            return stacked_labels
+
+        ax.set_xticklabels(format_x_ticks(ax.get_xticklabels()))  # Rotate by 90 degrees
+        plt.xticks(rotation=0)
+        plt.title("Correlation Heatmap with Significance Levels")
         if filepath is not None:
             plt.savefig(filepath, dpi=300, bbox_inches="tight")
             plt.close()

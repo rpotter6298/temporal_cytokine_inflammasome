@@ -14,6 +14,7 @@ from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.multitest import multipletests
 import scikit_posthocs as sp
 from statsmodels.stats.libqsturng import psturng
+import itertools
 
 
 class arbitrary_max:
@@ -63,7 +64,9 @@ class analysis_module:
                         & (treatment_subset["Time (hrs)"] >= window_time - 2)
                     ]
                     window_averages = (
-                        window_subset.groupby(["Time (hrs)"]).mean(numeric_only=True).reset_index()
+                        window_subset.groupby(["Time (hrs)"])
+                        .mean(numeric_only=True)
+                        .reset_index()
                     )
                     # get max change_rate from window_averages
                     max_change_rate_idx = window_averages["Change_Rate"].idxmax()
@@ -93,7 +96,9 @@ class analysis_module:
                         & (treatment_subset["Time (hrs)"] >= window_time - 2)
                     ]
                     window_averages = (
-                        window_subset.groupby(["Time (hrs)"]).mean(numeric_only=True).reset_index()
+                        window_subset.groupby(["Time (hrs)"])
+                        .mean(numeric_only=True)
+                        .reset_index()
                     )
 
                     max_change_rate_diff_idx = window_averages[
@@ -216,7 +221,9 @@ class analysis_module:
         results = []
         reference = pd.DataFrame(module.tdic)
         reference["Max_Change_Rate"] = reference["Max_Change_Rate (Proportion)"]
-        reference["Max_Change_Rate_Time"] = reference["Max_Change_Rate_Time (Proportion)"]
+        reference["Max_Change_Rate_Time"] = reference[
+            "Max_Change_Rate_Time (Proportion)"
+        ]
         for treatment in module.comp.treatments:
             print(treatment)
             result = {"Treatment": treatment, "Modifier": module.comp.modifier}
@@ -335,9 +342,9 @@ class analysis_module:
         # Dunnett's correction
         k = len(raw_p_values)
         q_values = [np.abs(psturng(p * k, k, np.inf)) for p in raw_p_values]
-        
+
         results["Dunnett Adjusted P-Value"] = q_values
-            # results.set_index("Time", inplace=True)
+        # results.set_index("Time", inplace=True)
         return results
 
     def aggregate_time_comparisons(
@@ -418,12 +425,16 @@ class analysis_module:
                 # Test for normality
                 stat, p = shapiro(time_0_set["Measurement"])
                 if p < 0.05:
-                    print(f"Data for Treatment {treatment} and Analyte {analyte} is not normally distributed")
+                    print(
+                        f"Data for Treatment {treatment} and Analyte {analyte} is not normally distributed"
+                    )
                     print(p)
                     # You can decide to continue or break based on this result
                     continue
                 else:
-                    print(f"Data for Treatment {treatment} and Analyte {analyte} is normally distributed")
+                    print(
+                        f"Data for Treatment {treatment} and Analyte {analyte} is normally distributed"
+                    )
                     print(p)
                 max_measurement = set["Measurement"].mean()
 
@@ -734,3 +745,163 @@ class analysis_module:
         for analyte in analyte_pair:
             split_data[analyte] = module.data[module.data["Analyte"] == analyte]
         return split_data
+
+    def correlation(self, dataset_1, dataset_2, parameter="Normalized_Measurement"):
+        """
+        Runs pearson/spearman (programmatically decided) correlation between two specified datasets.
+        Also runs cosine similarity between two specified datasets.
+        Returns a dictionary containing the results of the correlation and cosine similarity.
+
+        Parameters:
+        dataset_1: tuple containing module, analyte, and treatment list (optional)
+        dataset_2: tuple containing module, analyte, and treatment list (optional)
+
+        Returns:
+        Dictionary containing the results of the correlation and cosine similarity.
+
+        Example:
+        correlation(("TS_Cyto", "IL1b", "ATP"), ("TS_Speck", "None", "ATP"))
+        """
+
+        def balance_times(subset_1, subset_2):
+            time_points_1 = subset_1["Time (hrs)"].unique()
+            time_points_2 = subset_2["Time (hrs)"].unique()
+
+            # identify any time points outside the range of the other set
+            # if there are any, remove them from the set
+            # also remove them from the time points list
+            if time_points_1.max() > time_points_2.max():
+                subset_1 = subset_1[subset_1["Time (hrs)"] <= time_points_2.max()]
+                time_points_1 = subset_1["Time (hrs)"].unique()
+            elif time_points_2.max() > time_points_1.max():
+                subset_2 = subset_2[subset_2["Time (hrs)"] <= time_points_1.max()]
+                time_points_2 = subset_2["Time (hrs)"].unique()
+
+            # if there are any time points that are not in both sets, make a dictionary of the missing times and which set they are missing from
+            missing_times = {}
+            for time in time_points_1:
+                if time not in time_points_2:
+                    missing_times[time] = "subset_2"
+            for time in time_points_2:
+                if time not in time_points_1:
+                    missing_times[time] = "subset_1"
+            import pandas as pd
+
+            # for each time that is missing, find the nearest two times from the respective subset and average them to impute these rows
+            for time, subset_name in missing_times.items():
+                current_subset = subset_1 if subset_name == "subset_1" else subset_2
+
+                # average the nearest two times to the missing time
+                imputed_values = current_subset.groupby(
+                    ["Experimental_Replicate"]
+                ).apply(
+                    lambda x:
+                    # get the two nearest times
+                    x.loc[
+                        (x["Time (hrs)"] == x["Time (hrs)"].max())
+                        | (x["Time (hrs)"] == x["Time (hrs)"].min())
+                    ][parameter].mean()
+                )
+                imputed_df = pd.DataFrame(
+                    {
+                        "Time (hrs)": [time] * len(imputed_values),
+                        "Experimental_Replicate": imputed_values.index,
+                        parameter: imputed_values,
+                    }
+                )
+                if subset_name == "subset_1":
+                    subset_1 = pd.concat([subset_1, imputed_df])
+                else:
+                    subset_2 = pd.concat([subset_2, imputed_df])
+
+            # Sorting the subsets by time after imputation
+            subset_1 = subset_1.sort_values(
+                by=["Time (hrs)", "Experimental_Replicate"]
+            ).reset_index(drop=True)
+            subset_2 = subset_2.sort_values(
+                by=["Time (hrs)", "Experimental_Replicate"]
+            ).reset_index(drop=True)
+
+            return subset_1, subset_2
+
+        def balance_replicates(subset_1, subset_2):
+            ##TODO: add later if needed.
+            return subset_1, subset_2
+
+        def cosine_similarity(vector_a, vector_b):
+            # Compute the dot product
+            dot_product = np.dot(vector_a, vector_b)
+            # Compute the magnitude (norm) of each vector
+            norm_a = np.linalg.norm(vector_a)
+            norm_b = np.linalg.norm(vector_b)
+            # Compute cosine similarity
+            similarity = dot_product / (norm_a * norm_b)
+            return similarity
+
+        subset_1 = self.modules[dataset_1[0]].data[
+            self.modules[dataset_1[0]].data["Analyte"] == dataset_1[1]
+        ]
+        subset_2 = self.modules[dataset_2[0]].data[
+            self.modules[dataset_2[0]].data["Analyte"] == dataset_2[1]
+        ]
+
+        if dataset_1[2] != "None":
+            subset_1 = subset_1[subset_1["Treatment"].isin(dataset_1[2])]
+        if dataset_2[2] != "None":
+            subset_2 = subset_2[subset_2["Treatment"].isin(dataset_2[2])]
+
+        # drop all columns except for time, experimental replicate, and the parameter
+        subset_1 = subset_1[["Time (hrs)", "Experimental_Replicate", parameter]]
+        subset_2 = subset_2[["Time (hrs)", "Experimental_Replicate", parameter]]
+
+        subset_1, subset_2 = balance_replicates(subset_1, subset_2)
+        subset_1, subset_2 = balance_times(subset_1, subset_2)
+
+        time_correlation = {}
+        for time in subset_1["Time (hrs)"].unique():
+            subset_1_time = subset_1[subset_1["Time (hrs)"] == time]
+            subset_2_time = subset_2[subset_2["Time (hrs)"] == time]
+            # run shapiro wilks test to determine normality
+            # if normal, run pearson, if not, run spearman
+            normality_test_1 = scipy.stats.shapiro(subset_1_time[parameter])[1]
+            normality_test_2 = scipy.stats.shapiro(subset_2_time[parameter])[1]
+            if normality_test_1 > 0.05 and normality_test_2 > 0.05:
+                corr_type = "pearson"
+                corr = scipy.stats.pearsonr(
+                    subset_1_time[parameter], subset_2_time[parameter]
+                )
+            else:
+                corr_type = "spearman"
+                corr = scipy.stats.spearmanr(
+                    subset_1_time[parameter], subset_2_time[parameter]
+                )
+            time_correlation[time] = {
+                "Normality Test - Subset 1": normality_test_1,
+                "Normality Test - Subset 2": normality_test_2,
+                "Correlation Type": corr_type,
+                "Correlation": corr[0],
+                "p-value": corr[1],
+            }
+
+        # run shapiro wilks test to determine normality
+        # if normal, run pearson, if not, run spearman
+        normality_test_1 = scipy.stats.shapiro(subset_1[parameter])[1]
+        normality_test_2 = scipy.stats.shapiro(subset_2[parameter])[1]
+        if normality_test_1 > 0.05 and normality_test_2 > 0.05:
+            corr_type = "pearson"
+            corr = scipy.stats.pearsonr(subset_1[parameter], subset_2[parameter])
+        else:
+            corr_type = "spearman"
+            corr = scipy.stats.spearmanr(subset_1[parameter], subset_2[parameter])
+        cos = cosine_similarity(subset_1[parameter], subset_2[parameter])
+        corr_dict = {
+            "Normality Test - Subset 1 Overall": normality_test_1,
+            "Normality Test - Subset 2 Overall": normality_test_2,
+            "Correlation Type - Overall": corr_type,
+            "Correlation - Overall": corr[0],
+            "p-value - Overall": corr[1],
+            "Cosine Similarity": cos,
+            "Time Correlation": time_correlation,
+        }
+
+        return subset_1, subset_2, corr_dict

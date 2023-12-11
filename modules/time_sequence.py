@@ -114,19 +114,37 @@ class time_sequence_module:
                     by=["Analyte", "Treatment", "Experimental_Replicate", "Time (hrs)"],
                     inplace=True,
                 )
-                change_rate["Normalized_Change_Rate"] = change_rate.groupby(
+                change_rate["Normalized_Change"] = change_rate.groupby(
                     ["Analyte", "Treatment", "Experimental_Replicate"]
                 )["Normalized_Measurement"].diff()
-                #set change_rate["Change_Rate"] to the difference between sequential measurements
+                # set change_rate["Change_Rate"] to the difference between sequential measurements
                 change_rate["Change_Rate"] = change_rate.groupby(
                     ["Analyte", "Treatment", "Experimental_Replicate"]
                 )["Measurement"].diff()
 
+                change_rate["Absolute_Change"] = change_rate.groupby(
+                    ["Analyte", "Treatment", "Experimental_Replicate"]
+                )["Measurement"].diff()
 
                 change_rate["Change_Rate"] = (
-                    change_rate.groupby(["Analyte", "Treatment", "Experimental_Replicate"])["Measurement"]
+                    change_rate.groupby(
+                        ["Analyte", "Treatment", "Experimental_Replicate"]
+                    )["Measurement"]
                     .apply(lambda x: x / x.shift(1))
-                    .reset_index(level=["Analyte", "Treatment", "Experimental_Replicate"], drop=True)
+                    .reset_index(
+                        level=["Analyte", "Treatment", "Experimental_Replicate"],
+                        drop=True,
+                    )
+                )
+                change_rate["Acceleration"] = (
+                    change_rate.groupby(
+                        ["Analyte", "Treatment", "Experimental_Replicate"]
+                    )["Measurement"]
+                    .apply(lambda x: x / x.shift(1))
+                    .reset_index(
+                        level=["Analyte", "Treatment", "Experimental_Replicate"],
+                        drop=True,
+                    )
                 )
 
                 # change_rate["Change_Rate"] = change_rate.groupby(
@@ -143,7 +161,16 @@ class time_sequence_module:
                 change_rate["Change_Rate_Lagging"] = change_rate.groupby(
                     ["Analyte", "Treatment", "Experimental_Replicate"]
                 )["Change_Rate"].transform(
-                    lambda x: x.rolling(window=(int(2 / time_increment))).mean(numeric_only=True)
+                    lambda x: x.rolling(window=(int(2 / time_increment))).mean(
+                        numeric_only=True
+                    )
+                )
+                change_rate["Acceleration_Smooth"] = change_rate.groupby(
+                    ["Analyte", "Treatment", "Experimental_Replicate"]
+                )["Change_Rate"].transform(
+                    lambda x: x.rolling(window=(int(2 / time_increment))).mean(
+                        numeric_only=True
+                    )
                 )
                 change_rate["Change_Rate_Diff"] = change_rate[
                     "Change_Rate_Diff"
@@ -151,7 +178,9 @@ class time_sequence_module:
                 change_rate["Change_Rate_Diff_Lagging"] = change_rate.groupby(
                     ["Analyte", "Treatment", "Experimental_Replicate"]
                 )["Change_Rate_Diff"].transform(
-                    lambda x: x.rolling(window=(int(2 / time_increment))).mean(numeric_only=True)
+                    lambda x: x.rolling(window=(int(2 / time_increment))).mean(
+                        numeric_only=True
+                    )
                 )
 
                 return change_rate

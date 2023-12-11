@@ -4,3 +4,5 @@ __pycache__/
 data/*
 plots/*.zip
 .archive/
+old_plots/
+```
