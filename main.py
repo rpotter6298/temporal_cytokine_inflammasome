@@ -146,10 +146,13 @@ def generate_plots(TAS, file_extension=".tiff"):
                 aname = "IL-18"
 
             def ax_modification(ax):
-                ax.set_title(str(aname + " Concentration over Time"))
+                ax.set_title(f"Extracellular {aname} Concentration")
                 ax.set_ylabel("Concentration (pg/mL)")
                 ymin, ymax = ax.get_ylim()
                 ax.set_ylim(ymin, ymax * 1.2)
+                ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
+                ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
+                ax.set_xlim(0, 24)
 
             plotting_module.plot_lineplot(
                 **TAS.prepare_lineplot(
@@ -220,7 +223,7 @@ def generate_plots(TAS, file_extension=".tiff"):
                 "".join(
                     [
                         file_title.replace("-", "").replace(" ", "_").replace(":", "-"),
-                        replace("β", "b")"),
+                        replace("β", "b"),
                         file_extension,
                     ]
                 ),
@@ -299,13 +302,13 @@ def generate_plots(TAS, file_extension=".tiff"):
             )
 
     ### RUN ALL FUNCTIONS
-    ratio_IL18_IL1b()
-    ratio_IL18_IL1b_with_specks()
-    ratio_IL18_IL1b_with_specks_individual()
+    #ratio_IL18_IL1b()
+    #ratio_IL18_IL1b_with_specks()
+    #ratio_IL18_IL1b_with_specks_individual()
     cytokine_plots_all_treatments_single_analyte()
-    speck_curves_raw_counts()
-    speck_plots_individual()
-    normalized_speck_counts_with_MCC950()
+    #speck_curves_raw_counts()
+    #speck_plots_individual()
+    #normalized_speck_counts_with_MCC950()
 
 
 def generate_plots_ldh(TAS, file_extension=".tiff"):
@@ -471,56 +474,185 @@ def build_correlation_df(
 
     return overall_corr_df, time_corr_df
 
+
 def generate_plots_changes(TAS, file_extension=".tiff"):
     file_dir = Path("plots", "change_plots")
     file_dir.mkdir(parents=True, exist_ok=True)
-    #This part makes the change plots for the cytokines
+    # This part makes the change plots for the cytokines
     for treatment in ["ATP", "MSU", "Nigericin"]:
-        for method in ["Change", "Acceleration", "Smoothed Acceleration", "combo"]:
-            plotting_module.change_plot(
-                TAS.modules["TS_Cyto"],
-                treatments=[treatment],
-                mode=method,
-                filepath=f"{file_dir}/{treatment}_{method}_Cytokines.png",
-            )
-            for analyte in ["IL1b", "IL18"]:
+        for normalization in [False]:
+            for method in ["Delta", "Acceleration", "Smoothed Acceleration"]:
                 plotting_module.change_plot(
                     TAS.modules["TS_Cyto"],
                     treatments=[treatment],
-                    analytes=[analyte],
                     mode=method,
-                    filepath=f"{file_dir}/{treatment}_{method}_{analyte}.png",
+                    filepath=f"{file_dir}/{treatment}_{method}_Cytokines.png",
+                    normalized=normalization,
                 )
-    for method in ["Change", "Acceleration", "Smoothed Acceleration"]:
+                plotting_module.change_plot(
+                    TAS.modules["TS_Speck"],
+                    treatments=[treatment],
+                    mode=method,
+                    filepath=f"{file_dir}/{treatment}_{method}_Speck.png",
+                    normalized=normalization,
+                )
+                for analyte in ["IL1b", "IL18"]:
+                    plotting_module.change_plot(
+                        TAS.modules["TS_Cyto"],
+                        treatments=[treatment],
+                        analytes=[analyte],
+                        mode=method,
+                        filepath=f"{file_dir}/{treatment}_{method}_{analyte}.png",
+                        normalized=normalization,
+                    )
+    for method in ["Delta", "Acceleration", "Smoothed Acceleration"]:
         plotting_module.change_plot(
             TAS.modules["TS_Speck"],
             treatments=["ATP", "MSU", "Nigericin"],
             mode=method,
             filepath=f"{file_dir}/Speck_{method}.png",
         )
-#TODO Add the change plots that are missing here
+
+
+def check_time_point(treatment, analyte, time, method):
+    import scipy
+
+    example_1 = TAS.modules["TS_Cyto"].data[
+        (TAS.modules["TS_Cyto"].data["Treatment"] == treatment)
+        & (TAS.modules["TS_Cyto"].data["Analyte"] == analyte)
+    ]
+    example_2 = TAS.modules["TS_Speck"].data[
+        (TAS.modules["TS_Speck"].data["Treatment"] == treatment)
+    ]
+    parameter = method
+    # drop all columns except for time, experimental replicate, and the parameter
+    subset_1 = example_1[["Time (hrs)", "Experimental_Replicate", parameter]]
+    subset_2 = example_2[["Time (hrs)", "Experimental_Replicate", parameter]]
+
+    def balance_times(subset_1, subset_2):
+        time_points_1 = subset_1["Time (hrs)"].unique()
+        time_points_2 = subset_2["Time (hrs)"].unique()
+
+        # identify any time points outside the range of the other set
+        # if there are any, remove them from the set
+        # also remove them from the time points list
+        if time_points_1.max() > time_points_2.max():
+            subset_1 = subset_1[subset_1["Time (hrs)"] <= time_points_2.max()]
+            time_points_1 = subset_1["Time (hrs)"].unique()
+        elif time_points_2.max() > time_points_1.max():
+            subset_2 = subset_2[subset_2["Time (hrs)"] <= time_points_1.max()]
+            time_points_2 = subset_2["Time (hrs)"].unique()
+
+        # if there are any time points that are not in both sets, make a dictionary of the missing times and which set they are missing from
+        missing_times = {}
+        for time in time_points_1:
+            if time not in time_points_2:
+                missing_times[time] = "subset_2"
+        for time in time_points_2:
+            if time not in time_points_1:
+                missing_times[time] = "subset_1"
+        import pandas as pd
+
+        # for each time that is missing, find the nearest two times from the respective subset and average them to impute these rows
+        for time, subset_name in missing_times.items():
+            current_subset = subset_1 if subset_name == "subset_1" else subset_2
+
+            # average the nearest two times to the missing time
+            imputed_values = current_subset.groupby(["Experimental_Replicate"]).apply(
+                lambda x:
+                # get the two nearest times
+                x.loc[
+                    (x["Time (hrs)"] == x["Time (hrs)"].max())
+                    | (x["Time (hrs)"] == x["Time (hrs)"].min())
+                ][parameter].mean()
+            )
+            imputed_df = pd.DataFrame(
+                {
+                    "Time (hrs)": [time] * len(imputed_values),
+                    "Experimental_Replicate": imputed_values.index,
+                    parameter: imputed_values,
+                }
+            )
+            if subset_name == "subset_1":
+                subset_1 = pd.concat([subset_1, imputed_df])
+            else:
+                subset_2 = pd.concat([subset_2, imputed_df])
+
+        # Sorting the subsets by time after imputation
+        subset_1 = subset_1.sort_values(
+            by=["Time (hrs)", "Experimental_Replicate"]
+        ).reset_index(drop=True)
+        subset_2 = subset_2.sort_values(
+            by=["Time (hrs)", "Experimental_Replicate"]
+        ).reset_index(drop=True)
+
+        return subset_1, subset_2
+
+    subset_A, subset_B = balance_times(subset_1, subset_2)
+
+    time_correlation = {}
+    # time = 7
+
+    subset_1_time = subset_A[subset_A["Time (hrs)"] == time]
+    subset_2_time = subset_B[subset_B["Time (hrs)"] == time]
+    # run shapiro wilks test to determine normality
+    # if normal, run pearson, if not, run spearman
+    normality_test_1 = scipy.stats.shapiro(subset_1_time[parameter])[1]
+    normality_test_2 = scipy.stats.shapiro(subset_2_time[parameter])[1]
+    if normality_test_1 > 0.05 and normality_test_2 > 0.05:
+        corr_type = "pearson"
+        corr = scipy.stats.pearsonr(subset_1_time[parameter], subset_2_time[parameter])
+    else:
+        corr_type = "spearman"
+        corr = scipy.stats.spearmanr(subset_1_time[parameter], subset_2_time[parameter])
+    time_correlation[time] = {
+        "Normality Test - Subset 1": normality_test_1,
+        "Normality Test - Subset 2": normality_test_2,
+        "Correlation Type": corr_type,
+        "Correlation": corr[0],
+        "p-value": corr[1],
+    }
+    print(subset_1_time)
+    print(subset_2_time)
+    print(time_correlation[time])
+
+
+# TODO Add the change plots that are missing here
+
 
 def main():
     # check that all requirements in requirements.txt are installed
     TAS = prepare_analysis_class()
     generate_reports(TAS)
     generate_plots(TAS)
+    generate_plots(TAS, file_extension=".png")
     TAS.modules["LDH"] = LDHModule()
     generate_plots_ldh(TAS)
     generate_plots_ldh(TAS, file_extension=".png")
     # generate_plots(TAS, file_extension=".png")
-    overall, time = build_correlation_df(TAS)
-    generate_plots_changes(TAS)
-    plotting_module.time_heatmap(time, filepath=Path("plots", "time_heatmap.png"))
+    generate_plots_changes(TAS, file_extension=".png")
+    overall, time = build_correlation_df(TAS, parameter="Delta")
+    plotting_module.time_heatmap(time, filepath=Path("plots", "Delta_time_heatmap.png"))
+    overall, time = build_correlation_df(TAS, parameter="Acceleration")
+    plotting_module.time_heatmap(
+        time, filepath=Path("plots", "Acceleration_time_heatmap.png")
+    )
 
 
 # module = TAS.modules["TS_Cyto"]
 # speck = TAS.modules["TS_Speck"].data
 
+cyto = TAS.modules["TS_Cyto"]
+cyto.data
+cyto_df = cyto.data[cyto.data["Treatment"] == "MSU"][cyto.data["Time (hrs)"] == 7]
+
 # ###PLAYGROUND
 # import matplotlib.pyplot as plt
 # import seaborn as sns
 
+check_time_point("ATP", "IL1b", 16.5, "Delta")
+
+TAS.correlation()
 # file_dir = Path("plots", "change_plots", "combos")
 
 # for treatment in ["ATP", "MSU", "Nigericin"]:

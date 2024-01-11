@@ -620,7 +620,7 @@ class plotting_module:
                 ax=ax,
             )
         ax.spines["right"].set_position(("outward", 0))
-        ax.set_ylabel("Cytotoxicity", color="red")
+        ax.set_ylabel("Cell Death (% of Maximum)", color="red")
         ax.tick_params(axis="y", colors="red")
         # Add % symbol to tick values on ax3
         ax.yaxis.set_major_formatter(ticker.PercentFormatter())
@@ -633,7 +633,7 @@ class plotting_module:
                 color="w",
                 markerfacecolor="red",
                 markersize=8,
-                label="Cytotoxicity",
+                label="Cell Death",
                 linestyle="None",
             )
         )
@@ -689,7 +689,10 @@ class plotting_module:
             ncol=3,
         )
         plt.xlim(-1.25, 21.2)
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
+        ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
         plt.xlabel("Time (hrs)")
+        ax.set_title(treatments[0])
 
         if filepath is not None:
             plt.savefig(filepath, dpi=300, bbox_inches="tight")
@@ -699,32 +702,33 @@ class plotting_module:
 
     @staticmethod
     def change_plot(
-        module, analytes=None, treatments=None, mode="change", axis=None, filepath=None
+        module, analytes=None, treatments=None, mode="change", axis=None, filepath=None, normalized=False,
     ):
         if axis == None:
             fig, ax = plt.subplots(figsize=(16, 9))
         else:
             ax = axis
-        if mode.lower() == "change":
-            y = "Absolute_Change"
+        if mode.lower() == "delta":
+            y = "Delta"
         elif mode.lower() == "acceleration":
             y = "Acceleration"
         elif mode.lower() == "smoothed acceleration":
             y = "Acceleration_Smooth"
         elif mode.lower() == "combo":
-            y1 = "Absolute_Change"
+            y1 = "Delta"
             y2 = "Acceleration"
             y3 = "Acceleration_Smooth"
             ax2 = ax.twinx()
         else:
             raise ValueError("Invalid Mode Specified")
-
+        if normalized == True:
+            y = f"Normalized_{y}"       
         if treatments is None:
             treatments = module.data["Treatment"].unique()
         if module.name == "TS_Speck":
             label = "Speck Count"
         elif module.name == "TS_Cyto":
-            label = "Concentration"
+            label = ""
         legend_elements = []
         if analytes is None:
             analyte_list = module.data["Analyte"].unique()
@@ -758,18 +762,32 @@ class plotting_module:
                         legend=False,
                         linestyle=linestyle,
                     )
-                    legend_elements.append(
+                    if mode.lower() != "delta":
+                        legend_elements.append(
                         Line2D(
                             [0],
                             [0],
                             color=palette[i],
                             lw=2,
-                            label=f"{label} {mode.title()} {analyte_tag}",
+                            label=f"{label} {mode.title()} {analyte_tag.replace('b', 'β')}",
                             linestyle=linestyle,
                         ),
                     )
-                    ax.set_ylabel(f"{mode.title()}")
-
+                    else:
+                        legend_elements.append(
+                        Line2D(
+                            [0],
+                            [0],
+                            color=palette[i],
+                            lw=2,
+                            label=f"{label} Change {analyte_tag.replace('b', 'β')}",
+                            linestyle=linestyle,
+                        ),
+                    )
+                    if mode.lower() != "delta":
+                        ax.set_ylabel(f"{mode.title()}")
+                    else:
+                        ax.set_ylabel(f"Change")
                 else:
                     palette = plotting_module.custom_palette(index)
                     # ax2 = ax.twinx()
@@ -843,8 +861,11 @@ class plotting_module:
                 ncol=3,
             )
             plt.xlim(-1.25, 24)
+            ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
+            ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
             if filepath is not None:
-                ax.set_title(filepath.split("/")[-1].split(".")[0].replace("_", " "))
+                ax.set_title(treatment)
+                #ax.set_title(filepath.split("/")[-1].split(".")[0].replace("_", " ").replace("Delta", "Change"))
                 plt.savefig(filepath, dpi=300, bbox_inches="tight")
                 plt.close()
             else:
@@ -970,9 +991,10 @@ class plotting_module:
             ]
             return stacked_labels
 
+        variant = filepath.name.split("_")[0].title()
         ax.set_xticklabels(format_x_ticks(ax.get_xticklabels()))  # Rotate by 90 degrees
         plt.xticks(rotation=0)
-        plt.title("Correlation Heatmap with Significance Levels")
+        plt.title(f"Correlation Heatmap with Significance Levels ({variant})")
         if filepath is not None:
             plt.savefig(filepath, dpi=300, bbox_inches="tight")
             plt.close()

@@ -136,16 +136,16 @@ class time_sequence_module:
                         drop=True,
                     )
                 )
-                change_rate["Acceleration"] = (
-                    change_rate.groupby(
-                        ["Analyte", "Treatment", "Experimental_Replicate"]
-                    )["Measurement"]
-                    .apply(lambda x: x / x.shift(1))
-                    .reset_index(
-                        level=["Analyte", "Treatment", "Experimental_Replicate"],
-                        drop=True,
-                    )
-                )
+                # change_rate["Acceleration"] = (
+                #     change_rate.groupby(
+                #         ["Analyte", "Treatment", "Experimental_Replicate"]
+                #     )["Measurement"]
+                #     .apply(lambda x: x / x.shift(1))
+                #     .reset_index(
+                #         level=["Analyte", "Treatment", "Experimental_Replicate"],
+                #         drop=True,
+                #     )
+                # )
 
                 # change_rate["Change_Rate"] = change_rate.groupby(
                 #     ["Analyte", "Treatment", "Experimental_Replicate"]
@@ -165,19 +165,57 @@ class time_sequence_module:
                         numeric_only=True
                     )
                 )
-                change_rate["Acceleration_Smooth"] = change_rate.groupby(
-                    ["Analyte", "Treatment", "Experimental_Replicate"]
-                )["Change_Rate"].transform(
-                    lambda x: x.rolling(window=(int(2 / time_increment))).mean(
-                        numeric_only=True
-                    )
-                )
+                # change_rate["Acceleration_Smooth"] = change_rate.groupby(
+                #     ["Analyte", "Treatment", "Experimental_Replicate"]
+                # )["Change_Rate"].transform(
+                #     lambda x: x.rolling(window=(int(2 / time_increment))).mean(
+                #         numeric_only=True
+                #     )
+                # )
                 change_rate["Change_Rate_Diff"] = change_rate[
                     "Change_Rate_Diff"
                 ].fillna(0)
                 change_rate["Change_Rate_Diff_Lagging"] = change_rate.groupby(
                     ["Analyte", "Treatment", "Experimental_Replicate"]
                 )["Change_Rate_Diff"].transform(
+                    lambda x: x.rolling(window=(int(2 / time_increment))).mean(
+                        numeric_only=True
+                    )
+                )
+
+                ##New Change Rate Variables. Can't delete the old ones because they might be used elsewhere.
+                change_rate["Delta"] = change_rate.groupby(
+                    ["Analyte", "Treatment", "Experimental_Replicate"]
+                )["Measurement"].diff()
+                change_rate["Delta"] = change_rate["Delta"].fillna(0)
+                change_rate["Normalized_Delta"] = change_rate.groupby(
+                    ["Analyte", "Treatment", "Experimental_Replicate"]
+                )["Normalized_Measurement"].diff()
+                change_rate["Normalized_Delta"] = change_rate[
+                    "Normalized_Delta"
+                ].fillna(0)
+                # Acceleration == Delta of Delta
+                change_rate["Acceleration"] = change_rate.groupby(
+                    ["Analyte", "Treatment", "Experimental_Replicate"]
+                )["Delta"].diff()
+                change_rate["Acceleration"] = change_rate["Acceleration"].fillna(0)
+                change_rate["Normalized_Acceleration"] = change_rate.groupby(
+                    ["Analyte", "Treatment", "Experimental_Replicate"]
+                )["Normalized_Delta"].diff()
+                change_rate["Normalized_Acceleration"] = change_rate[
+                    "Normalized_Acceleration"
+                ].fillna(0)
+
+                change_rate["Acceleration_Smooth"] = change_rate.groupby(
+                    ["Analyte", "Treatment", "Experimental_Replicate"]
+                )["Acceleration"].transform(
+                    lambda x: x.rolling(window=(int(2 / time_increment))).mean(
+                        numeric_only=True
+                    )
+                )
+                change_rate["Normalized_Acceleration_Smooth"] = change_rate.groupby(
+                    ["Analyte", "Treatment", "Experimental_Replicate"]
+                )["Normalized_Acceleration"].transform(
                     lambda x: x.rolling(window=(int(2 / time_increment))).mean(
                         numeric_only=True
                     )
