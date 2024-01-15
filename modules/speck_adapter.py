@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 
 
-class Count_Aggregator:
+class Speck_adapter:
     def __init__(
         self,
         name,

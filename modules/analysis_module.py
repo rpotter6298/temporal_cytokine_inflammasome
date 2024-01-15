@@ -1,37 +1,22 @@
 from typing import Type, List, Dict, Any
-from modules.stats_functions import *
-import numpy as np
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
+from itertools import combinations, product
 from pathlib import Path
-import scipy.stats
-from itertools import combinations
-from itertools import product
-from scipy.stats import f_oneway
-from scipy.stats import shapiro
+from scipy.stats import f_oneway, shapiro
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.stats.multitest import multipletests
-import scikit_posthocs as sp
 from statsmodels.stats.libqsturng import psturng
+import scikit_posthocs as sp
+import scipy.stats
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
 import itertools
+from modules.stats_functions import *
 
 
-class arbitrary_max:
-    def __init__(self):
-        self.real_max = None
-        self.real_time = None
-        self.window = None
-        self.time = None
-        self.max = None
 
-
-class placeholder:
-    def __init__(self):
-        pass
-
-
-class analysis_module:
+class Analysis_module:
     def __init__(self, component_list: List = []):
         self.modules = {module.name: module for module in component_list}
         self.time_compare()
@@ -357,35 +342,30 @@ class analysis_module:
         significant_times = {}
         filename = output_directory / f"{module.name}_significant_times.xlsx"
 
-        for analyte in analytes:
-            data = module.data[module.data["Analyte"] == analyte]
-            # Iterate over each treatment
-            for treatment in treatments:
-                # Calculate the time range with a significant difference from zero count
-                table = self.time_point_comparison(treatment, analyte, module)
-                significant_range = (
-                    table[table["P-Value"] < 0.05].Time.min(),
-                    table[table["P-Value"] < 0.05].Time.max(),
-                )
+        with pd.ExcelWriter(filename) as writer:
+            for analyte in analytes:
+                data = module.data[module.data["Analyte"] == analyte]
+                # Iterate over each treatment
+                for treatment in treatments:
+                    # Calculate the time range with a significant difference from zero count
+                    table = self.time_point_comparison(treatment, analyte, module)
+                    significant_range = (
+                        table[table["P-Value"] < 0.05].Time.min(),
+                        table[table["P-Value"] < 0.05].Time.max(),
+                    )
 
-                # Store the significant times in the dictionary
-                significant_times[treatment] = significant_range
+                    # Store the significant times in the dictionary
+                    significant_times[treatment] = significant_range
 
-                # Write the significant times to the report
-                print(
-                    f"{treatment} is significant between {significant_range[0]} and {significant_range[1]}."
-                )
+                    # Write the significant times to the report
+                    print(
+                        f"{treatment} is significant between {significant_range[0]} and {significant_range[1]}."
+                    )
 
-                sheet_name = treatment
-                if len(analytes) > 1:
-                    sheet_name = str(analyte + "_" + treatment)
-                # Write the significant times to an Excel file
-                # If filename doesn't exist, create it
-                if not filename.exists():
-                    table.to_excel(filename, sheet_name=sheet_name, index=True)
-                with pd.ExcelWriter(
-                    filename, mode="a", if_sheet_exists="replace"
-                ) as writer:
+                    sheet_name = treatment
+                    if len(analytes) > 1:
+                        sheet_name = str(analyte + "_" + treatment)
+                    # Write the significant times to an Excel file
                     table.to_excel(writer, sheet_name=sheet_name, index=True)
 
     def create_summary_table(self, module=None):
@@ -448,7 +428,7 @@ class analysis_module:
                     & (module.Max_Change_Rate["Analyte"] == analyte)
                 ]
                 max_change_rate = tset["Change_Rate"].mean()
-                max_change_rate_normalized = tset["Normalized_Change_Rate"].mean()
+                #max_change_rate_normalized = tset["Normalized_Change_Rate"].mean()
                 time_to_max_change_rate = tset["Time (hrs)"].mean()
                 new_row = pd.DataFrame(
                     {
@@ -458,7 +438,7 @@ class analysis_module:
                         "Max Measurement P-Value": max_measuremnt_p,
                         "Max Measurement (Normalized)": max_measurement_normalized,
                         "Max Change Rate": max_change_rate,
-                        "Max Change Rate (Normalized)": max_change_rate_normalized,
+                        # "Max Change Rate (Normalized)": max_change_rate_normalized,
                         "Time to Max Measurement": time_to_max_measurement,
                         "Time to Max Change Rate": time_to_max_change_rate,
                     },
@@ -543,43 +523,6 @@ class analysis_module:
                 "hue_order": hue_order,
             }
         return lineplot_dict
-
-    def find_arbitrary_max(self, module):
-        self.time_compare()
-        max_values = module.Max_Normalized_Measurement
-        max_dict = {}
-        module.arbitrary_maximums = placeholder()
-        for analyte in max_values["Analyte"].unique():
-            analyte_data = max_values[max_values["Analyte"] == analyte]
-            mean_max_times = analyte_data.groupby(["Treatment"]).mean()["Time (hrs)"]
-            # Round the mean max times to the nearest measurement time
-            mean_max_times = mean_max_times.apply(
-                lambda x: analyte_data["Time (hrs)"].tolist()[
-                    np.abs(np.array(analyte_data["Time (hrs)"].tolist()) - x).argmin()
-                ]
-            )
-            for treatment, time in mean_max_times.items():
-                print(treatment)
-                time_table = self.time_point_comparison(
-                    treatment, module=module, time1=time
-                )
-                max_window = time_table[time_table["P-Value"] > 0.05]
-                arbitrary_max_time = time_table[time_table["P-Value"] > 0.05][
-                    "Time"
-                ].min()
-                arb_obj = arbitrary_max()
-                arb_obj.real_time = time
-                arb_obj.real_max = analyte_data.groupby(["Treatment"]).mean()[
-                    "Normalized_Measurement"
-                ][treatment]
-                arb_obj.time = arbitrary_max_time
-                arb_obj.window = max_window
-                arb_obj.max = module.data[
-                    (module.data["Time (hrs)"] == arbitrary_max_time)
-                    & (module.data["Analyte"] == analyte)
-                    & (module.data["Treatment"] == treatment)
-                ]["Normalized_Measurement"].mean()
-                setattr(module.arbitrary_maximums, treatment, arb_obj)
 
     def compare_max_time_distances(self, moduleA, moduleB):
         # Get tlist of all treatments which appear in both moduleA and moduleB data

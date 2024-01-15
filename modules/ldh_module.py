@@ -1,8 +1,6 @@
 # Standard library imports
 import os
 from pathlib import Path
-
-# Third-party library imports
 import matplotlib.pyplot as plt
 from matplotlib.ticker import PercentFormatter
 import numpy as np
@@ -13,7 +11,7 @@ from statsmodels.formula.api import ols
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 
 
-class LDHModule:
+class LDH_module:
     def __init__(self):
         self.od = pd.read_excel(
             Path(os.getcwd()) / "data" / "ldh" / "ldh_data.xlsx", sheet_name="OD"
